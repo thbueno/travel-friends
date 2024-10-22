@@ -1,10 +1,10 @@
 import dayjs from "dayjs";
-import { prisma } from "../lib/prisma";
 import { FastifyInstance } from "fastify";
 import { ZodTypeProvider } from "fastify-type-provider-zod";
-import { z } from "zod"
-import { getMailclient } from "../lib/mail";
 import nodemailer from 'nodemailer';
+import { z } from "zod";
+import { getMailclient } from "../lib/mail";
+import { prisma } from "../lib/prisma";
 
 export async function createTrip(app: FastifyInstance) {
     const schema = ({
@@ -14,6 +14,7 @@ export async function createTrip(app: FastifyInstance) {
           ends_at: z.coerce.date(),
           owner_name: z.string(),
           owner_email: z.string().email(),
+          emails_to_invite: z.array(z.string().email()),
         }),
       });
     
@@ -21,7 +22,7 @@ export async function createTrip(app: FastifyInstance) {
         schema: schema,
     }, async (request) => {
         
-        const { destination, starts_at, ends_at, owner_name, owner_email }: z.infer<typeof schema.body> = request.body as z.infer<typeof schema.body>;
+        const { destination, starts_at, ends_at, owner_name, owner_email, emails_to_invite }: z.infer<typeof schema.body> = request.body as z.infer<typeof schema.body>;
 
         if(dayjs(starts_at).isBefore(new Date())) {
             throw new Error('Starts trip date must be in the future')
@@ -35,7 +36,25 @@ export async function createTrip(app: FastifyInstance) {
             data: {
                 destination,
                 starts_at,
-                ends_at
+                ends_at,
+                participants: { 
+                   createMany: {
+                       data: [
+                        {
+                            name: owner_name, 
+                            email: owner_email,
+                            is_owner: true,
+                            is_confirmed: true,
+                        },
+                        ...emails_to_invite.map(email => {
+                            return { email }
+                        })
+
+
+
+                       ],
+                   }
+                },
             }
         })
 
